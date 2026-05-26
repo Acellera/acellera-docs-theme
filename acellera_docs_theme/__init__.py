@@ -44,6 +44,7 @@ def apply(
     *,
     project_name: str,
     github_repo: str,
+    extra_icon_links: list[dict[str, str]] | None = None,
 ) -> None:
     """Wire the Acellera branding into the conf.py namespace ``ns``.
 
@@ -53,10 +54,14 @@ def apply(
         The conf.py module globals. Always pass ``globals()``.
     project_name
         The text rendered next to the Acellera logo in the navbar
-        (e.g. ``"MoleculeKit"``).
+        (e.g. ``"MoleculeKit"``). Pass an empty string to render only
+        the logo with no title link.
     github_repo
         ``owner/repo`` string used for the GitHub icon link
         (e.g. ``"Acellera/moleculekit"``).
+    extra_icon_links
+        Extra icon-link dicts appended after the standard
+        Twitter / GitHub / LinkedIn / YouTube set.
     """
     ns.setdefault("html_theme", "pydata_sphinx_theme")
     ns.setdefault("html_context", {"default_mode": "light"})
@@ -74,6 +79,47 @@ def apply(
         list(ns.get("html_css_files") or []), "custom.css"
     )
 
+    icon_links: list[dict[str, str]] = [
+        {
+            "name": "Acellera",
+            "url": "https://www.acellera.com",
+            "icon": _ACELLERA_ICON_REL,
+            "type": "local",
+        },
+        {
+            "name": "Twitter",
+            "url": "https://twitter.com/acellera",
+            "icon": "fab fa-twitter",
+            "type": "fontawesome",
+        },
+        {
+            "name": "GitHub",
+            "url": f"https://github.com/{github_repo}",
+            "icon": "fab fa-github-square",
+            "type": "fontawesome",
+        },
+        {
+            "name": "LinkedIn",
+            "url": "https://www.linkedin.com/company/acellera/",
+            "icon": "fab fa-linkedin",
+            "type": "fontawesome",
+        },
+        {
+            "name": "Youtube",
+            "url": "https://www.youtube.com/user/acelleralive",
+            "icon": "fab fa-youtube",
+            "type": "fontawesome",
+        },
+        {
+            "name": "Medium",
+            "url": "https://medium.com/playmolecule",
+            "icon": "fab fa-medium",
+            "type": "fontawesome",
+        },
+    ]
+    if extra_icon_links:
+        icon_links.extend(extra_icon_links)
+
     user_options = ns.get("html_theme_options") or {}
     defaults: dict[str, Any] = {
         "logo": {
@@ -88,38 +134,7 @@ def apply(
         "navigation_with_keys": False,
         "footer_start": ["copyright"],
         "footer_end": [],
-        "icon_links": [
-            {
-                "name": "Acellera",
-                "url": "https://www.acellera.com",
-                "icon": _ACELLERA_ICON_REL,
-                "type": "local",
-            },
-            {
-                "name": "Twitter",
-                "url": "https://twitter.com/acellera",
-                "icon": "fab fa-twitter",
-                "type": "fontawesome",
-            },
-            {
-                "name": "GitHub",
-                "url": f"https://github.com/{github_repo}",
-                "icon": "fab fa-github-square",
-                "type": "fontawesome",
-            },
-            {
-                "name": "LinkedIn",
-                "url": "https://www.linkedin.com/company/acellera/",
-                "icon": "fab fa-linkedin",
-                "type": "fontawesome",
-            },
-            {
-                "name": "Youtube",
-                "url": "https://www.youtube.com/user/acelleralive",
-                "icon": "fab fa-youtube",
-                "type": "fontawesome",
-            },
-        ],
+        "icon_links": icon_links,
     }
     defaults.update(user_options)
     ns["html_theme_options"] = defaults
