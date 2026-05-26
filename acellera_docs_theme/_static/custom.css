@@ -23,6 +23,13 @@ body {
     color: #459db9;
 }
 
+/* Add breathing room between the Acellera logo image and the project-name
+ * text link (rendered as two adjacent <a class="navbar-brand"> elements
+ * by _templates/navbar-logo.html). */
+.navbar .navbar-brand.logo-title-link {
+    margin-left: 0.75rem;
+}
+
 body a {
     text-decoration: none;
 }
