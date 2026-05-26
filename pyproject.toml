@@ -1,0 +1,28 @@
+[project]
+name = "acellera-docs-theme"
+version = "0.1.0"
+description = "Shared Sphinx branding (logo, navbar, brand colours) for Acellera docs sites."
+authors = [{ name = "Acellera", email = "info@acellera.com" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pydata-sphinx-theme>=0.16",
+  "sphinx>=7",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Acellera/acellera-docs-theme"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["acellera_docs_theme*"]
+
+[tool.setuptools.package-data]
+acellera_docs_theme = [
+  "_static/*.css",
+  "_static/img/*.png",
+  "_templates/*.html",
+]
