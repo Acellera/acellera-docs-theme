@@ -24,13 +24,14 @@ __version__ = "0.1.0"
 _THIS_DIR = Path(__file__).parent
 _STATIC_DIR = str(_THIS_DIR / "_static")
 _TEMPLATES_DIR = str(_THIS_DIR / "_templates")
-_FAVICON = str(_THIS_DIR / "_static" / "img" / "acellera-logo-16x16.png")
+_FAVICON = str(_THIS_DIR / "_static" / "acellera-logo-16x16.png")
 
-# pydata-sphinx-theme reads these as paths relative to a directory in
-# ``html_static_path``. Because we add this package's _static to that list,
-# files referenced as ``_static/img/...`` resolve to bundled assets.
-_LOGO_REL = "_static/img/acellera_new_web.png"
-_ACELLERA_ICON_REL = "_static/img/acellera-logo-white.png"
+# pydata-sphinx-theme renders the navbar logo as ``<img src="_static/<basename>">``
+# regardless of any subdirectory in the configured path, so the bundled
+# images live directly under ``_static/`` (no ``img/`` subdir) for the
+# rendered URL to match the on-disk location.
+_LOGO_REL = "_static/acellera_new_web.png"
+_ACELLERA_ICON_REL = "_static/acellera-logo-white.png"
 
 
 def _append_unique(seq: list, item: str) -> list:
