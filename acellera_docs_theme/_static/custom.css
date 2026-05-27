@@ -17,10 +17,12 @@ body {
     --bs-link-decoration: none;
 }
 
-/* Make the package-name text next to the logo readable against the
- * dark-blue navbar (default pydata-sphinx-theme renders it in black). */
+/* Make the package-name text match the navbar section links (Installation,
+ * Tutorials, ...). Both inherit from --pst-color-text-muted, which we set
+ * to white inside the light-mode navbar above and which falls back to
+ * pydata's default in dark mode. */
 .navbar .logo__title {
-    color: #459db9;
+    color: var(--pst-color-text-muted);
 }
 
 /* Add breathing room between the Acellera logo image and the project-name
