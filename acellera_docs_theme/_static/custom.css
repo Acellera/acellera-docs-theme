@@ -34,6 +34,48 @@ body a {
     text-decoration: none;
 }
 
+/* --- Code-block filename captions -------------------------------------- */
+
+/* Make the caption sit flush atop the code block as a single visual unit,
+ * styled as a small monospace filename header. Works in both light and
+ * dark themes via pydata-sphinx-theme CSS variables. */
+
+div.literal-block-wrapper {
+    margin: 1em 0;
+}
+
+div.literal-block-wrapper div.code-block-caption {
+    padding: 0.35em 0.75em;
+    background-color: var(--pst-color-surface);
+    border: 1px solid var(--pst-color-border);
+    border-bottom: none;
+    border-top-left-radius: 0.25rem;
+    border-top-right-radius: 0.25rem;
+    font-family: var(--pst-font-family-monospace);
+    font-size: 0.85em;
+    color: var(--pst-color-text-muted);
+}
+
+div.literal-block-wrapper div.code-block-caption .caption-text {
+    font-weight: 600;
+}
+
+/* Square the top of the code box so it sits flush under the caption. */
+div.literal-block-wrapper div.highlight {
+    margin-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* Show the permalink anchor only on hover, like header anchors. */
+div.code-block-caption a.headerlink {
+    visibility: hidden;
+    margin-left: 0.4em;
+}
+div.code-block-caption:hover a.headerlink {
+    visibility: visible;
+}
+
 /* --- Executed-cell output blocks --------------------------------------- */
 
 /* Cap the height of executed-cell output blocks so long log spew is scrollable
