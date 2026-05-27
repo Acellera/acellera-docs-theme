@@ -48,7 +48,6 @@ div.literal-block-wrapper div.code-block-caption {
     padding: 0.35em 0.75em;
     background-color: var(--pst-color-surface);
     border: 1px solid var(--pst-color-border);
-    border-bottom: none;
     border-top-left-radius: 0.25rem;
     border-top-right-radius: 0.25rem;
     font-family: var(--pst-font-family-monospace);
