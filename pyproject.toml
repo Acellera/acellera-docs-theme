@@ -23,6 +23,6 @@ include = ["acellera_docs_theme*"]
 [tool.setuptools.package-data]
 acellera_docs_theme = [
   "_static/*.css",
-  "_static/img/*.png",
+  "_static/*.png",
   "_templates/*.html",
 ]
