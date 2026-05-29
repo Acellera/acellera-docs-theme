@@ -80,6 +80,20 @@ def apply(
         list(ns.get("html_css_files") or []), "custom.css"
     )
 
+    # Mol* 3D viewer assets + extension.
+    ns["html_css_files"] = _append_unique(
+        ns["html_css_files"], "molstar/molstar.css"
+    )
+    js_files = list(ns.get("html_js_files") or [])
+    # Order matters: the molstar global must exist before the bootstrap runs.
+    _append_unique(js_files, "molstar/molstar.js")
+    _append_unique(js_files, "molstar/molstar-embed.js")
+    ns["html_js_files"] = js_files
+
+    ns["extensions"] = _append_unique(
+        list(ns.get("extensions") or []), "acellera_docs_theme.molstar"
+    )
+
     icon_links: list[dict[str, str]] = [
         {
             "name": "Acellera",
