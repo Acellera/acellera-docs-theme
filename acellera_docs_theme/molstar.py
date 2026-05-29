@@ -55,6 +55,10 @@ MAX_FORMAL_CHARGE_LABELS = 200
 # coloring via the molstar color theme).
 _BALL_AND_STICK_SELECTORS = ("ligand", "ion", "water")
 
+# Ball-and-stick atom/bond thickness. MVS's size_factor default of 1 gives
+# oversized spheres; 0.3 yields a slim ball-and-stick close to moleculekit's.
+BALL_AND_STICK_SIZE_FACTOR = 0.3
+
 # molstar's cartoon needs a standard polymer backbone trace. Structures with
 # fewer cartoon-able standard residues than this (small molecules, ligands,
 # non-standard / cyclic peptides like cyclosporin) are drawn entirely as
@@ -125,11 +129,11 @@ def build_mvs(mol) -> str:
         ).color(custom={"molstar_color_theme_name": "secondary-structure"})
         for selector in _BALL_AND_STICK_SELECTORS:
             structure.component(selector=selector).representation(
-                type="ball_and_stick"
+                type="ball_and_stick", size_factor=BALL_AND_STICK_SIZE_FACTOR
             ).color(custom={"molstar_color_theme_name": "element-symbol"})
     else:
         structure.component(selector="all").representation(
-            type="ball_and_stick"
+            type="ball_and_stick", size_factor=BALL_AND_STICK_SIZE_FACTOR
         ).color(custom={"molstar_color_theme_name": "element-symbol"})
 
     _add_formal_charge_labels(builder, mol)
