@@ -12,20 +12,35 @@ from acellera_docs_theme.molstar import (
     STAGING_ENV_VAR,
     PUBLISH_SUBDIR,
     MAX_FORMAL_CHARGE_LABELS,
+    MIN_CARTOON_RESIDUES,
 )
 
 
 class FakeMol:
     """Duck-typed Molecule stand-in. show3d() uses .write(), .coords,
-    .formalcharge only - so tests need no moleculekit."""
+    .formalcharge, and the residue fields (.resname/.resid/.insertion/
+    .chain/.segid) - so tests need no moleculekit."""
 
-    def __init__(self, payload: bytes, coords, formalcharge):
+    def __init__(self, payload, coords, formalcharge, resname=None, resid=None):
         self.payload = payload
-        self.coords = np.asarray(coords, dtype=np.float32)        # (natoms, 3, nframes)
-        self.formalcharge = np.asarray(formalcharge, dtype=int)   # (natoms,)
+        self.coords = np.asarray(coords, dtype=np.float32)         # (natoms, 3, nframes)
+        self.formalcharge = np.asarray(formalcharge, dtype=int)    # (natoms,)
+        n = self.coords.shape[0]
+        self.resname = np.asarray(resname if resname is not None else ["ALA"] * n)
+        self.resid = np.asarray(resid if resid is not None else list(range(n)))
+        self.insertion = np.asarray([""] * n)
+        self.chain = np.asarray(["A"] * n)
+        self.segid = np.asarray(["P"] * n)
 
     def write(self, path):
         Path(path).write_bytes(self.payload)
+
+
+def _std_protein(n_res=8, payload=b"PROT"):
+    """A molecule of n_res standard (cartoon-able) residues, 1 atom each."""
+    coords = [[[float(i)], [0.0], [0.0]] for i in range(n_res)]
+    return FakeMol(payload, coords=coords, formalcharge=[0] * n_res,
+                   resname=["ALA"] * n_res, resid=list(range(n_res)))
 
 
 def _mvs_from_html(html: str) -> dict:
@@ -34,13 +49,11 @@ def _mvs_from_html(html: str) -> dict:
     return json.loads(htmllib.unescape(html[start:end]))
 
 
-# --- Task 4: structure file, representations, marker div -------------------
+# --- structure file + marker div -------------------------------------------
 
 def test_show3d_writes_bcif_and_emits_marker_div(tmp_path, monkeypatch):
     monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
-    mol = FakeMol(b"FAKE-BCIF", coords=[[[1.0], [2.0], [3.0]]], formalcharge=[0])
-
-    html = show3d(mol, height=480)._repr_html_()
+    html = show3d(_std_protein(payload=b"FAKE-BCIF"), height=480)._repr_html_()
 
     name = f"{hashlib.sha1(b'FAKE-BCIF').hexdigest()}.bcif"
     assert (tmp_path / name).read_bytes() == b"FAKE-BCIF"
@@ -49,28 +62,53 @@ def test_show3d_writes_bcif_and_emits_marker_div(tmp_path, monkeypatch):
     assert "height:480px" in html
     assert "<script" not in html
 
-    tree = _mvs_from_html(html)
-    blob = json.dumps(tree)
+    blob = json.dumps(_mvs_from_html(html))
     assert "__STRUCTURE_URL__" in blob            # bootstrap substitutes this
-    assert "cartoon" in blob
-    assert "ball_and_stick" in blob
-    assert "element-symbol" in blob               # element coloring on hetero
-    assert "secondary-structure" in blob          # cartoon coloring
+    assert "cartoon" in blob                       # standard polymer -> cartoon
+    assert "ball_and_stick" in blob                # hetero reps
+    assert "element-symbol" in blob
+    assert "secondary-structure" in blob
 
 
 def test_show3d_dedupes_identical_structures(tmp_path, monkeypatch):
     monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
-    mol = FakeMol(b"SAME", coords=[[[0.0], [0.0], [0.0]]], formalcharge=[0])
-    show3d(mol)
-    show3d(mol)
+    show3d(_std_protein(payload=b"SAME"))
+    show3d(_std_protein(payload=b"SAME"))
     assert len(list(tmp_path.glob("*.bcif"))) == 1
 
 
-# --- Task 5: formal-charge labels + cap ------------------------------------
+# --- representation policy (the cyclosporin bug) ---------------------------
+
+def test_standard_polymer_renders_as_cartoon(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    blob = json.dumps(_mvs_from_html(show3d(_std_protein(n_res=20))._repr_html_()))
+    assert "cartoon" in blob
+
+
+def test_nonstandard_peptide_renders_as_ball_and_stick_only(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    # Cyclosporin-like: enough residues, but none cartoon-able -> ball-and-stick all.
+    nonstd = ["DAL", "MLE", "MVA", "BMT", "ABA", "33X", "34E", "MLE"]
+    coords = [[[float(i)], [0.0], [0.0]] for i in range(len(nonstd))]
+    mol = FakeMol(b"CSA", coords=coords, formalcharge=[0] * len(nonstd),
+                  resname=nonstd, resid=list(range(len(nonstd))))
+    blob = json.dumps(_mvs_from_html(show3d(mol)._repr_html_()))
+    assert "cartoon" not in blob          # no cartoon trace attempted
+    assert "ball_and_stick" in blob       # every atom shown
+    assert blob.count('"selector": "all"') == 1
+
+
+def test_few_standard_residues_uses_ball_and_stick(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    blob = json.dumps(_mvs_from_html(show3d(_std_protein(n_res=MIN_CARTOON_RESIDUES - 1))._repr_html_()))
+    assert "cartoon" not in blob
+    assert "ball_and_stick" in blob
+
+
+# --- formal-charge labels + cap --------------------------------------------
 
 def test_show3d_adds_one_label_per_charged_atom(tmp_path, monkeypatch):
     monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
-    # 3 atoms: charges +1, 0, -2  -> expect labels "+1" and "-2" only.
     mol = FakeMol(
         b"L",
         coords=[[[0.0], [0.0], [0.0]],
@@ -78,8 +116,7 @@ def test_show3d_adds_one_label_per_charged_atom(tmp_path, monkeypatch):
                 [[2.0], [2.0], [2.0]]],
         formalcharge=[1, 0, -2],
     )
-    tree = _mvs_from_html(show3d(mol)._repr_html_())
-    blob = json.dumps(tree)
+    blob = json.dumps(_mvs_from_html(show3d(mol)._repr_html_()))
     assert blob.count('"+1"') == 1
     assert blob.count('"-2"') == 1
 
@@ -88,18 +125,17 @@ def test_show3d_skips_labels_over_cap(tmp_path, monkeypatch, caplog):
     monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
     n = MAX_FORMAL_CHARGE_LABELS + 1
     coords = [[[float(i)], [0.0], [0.0]] for i in range(n)]
-    mol = FakeMol(b"BIG", coords=coords, formalcharge=[1] * n)
+    mol = FakeMol(b"BIG", coords=coords, formalcharge=[1] * n)  # n standard ALA -> cartoon path
 
     with caplog.at_level("WARNING"):
-        tree = _mvs_from_html(show3d(mol)._repr_html_())
+        blob = json.dumps(_mvs_from_html(show3d(mol)._repr_html_()))
 
-    blob = json.dumps(tree)
     assert '"+1"' not in blob          # labels skipped
     assert "cartoon" in blob           # representations still present
     assert any("formal charge label" in r.message.lower() for r in caplog.records)
 
 
-# --- Task 6: staging helpers -----------------------------------------------
+# --- staging helpers -------------------------------------------------------
 
 def test_reset_staging_clears_old_files(tmp_path):
     staging = tmp_path / "molstar-staging"

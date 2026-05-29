@@ -27,6 +27,8 @@ __all__ = [
     "STAGING_ENV_VAR",
     "PUBLISH_SUBDIR",
     "MAX_FORMAL_CHARGE_LABELS",
+    "MIN_CARTOON_RESIDUES",
+    "STANDARD_POLYMER_RESNAMES",
     "reset_staging",
     "publish_structures",
 ]
@@ -48,9 +50,27 @@ STRUCTURE_URL_SENTINEL = "__STRUCTURE_URL__"
 #: of ion labels on a solvated box).
 MAX_FORMAL_CHARGE_LABELS = 200
 
-# Hetero selectors rendered as ball-and-stick (bond orders render automatically
-# from the BinaryCIF bond table; element coloring via the molstar color theme).
+# Hetero selectors rendered as ball-and-stick alongside the polymer cartoon
+# (bond orders render automatically from the BinaryCIF bond table; element
+# coloring via the molstar color theme).
 _BALL_AND_STICK_SELECTORS = ("ligand", "ion", "water")
+
+# molstar's cartoon needs a standard polymer backbone trace. Structures with
+# fewer cartoon-able standard residues than this (small molecules, ligands,
+# non-standard / cyclic peptides like cyclosporin) are drawn entirely as
+# ball-and-stick so every atom is visible.
+MIN_CARTOON_RESIDUES = 6
+
+# Residues molstar can trace as a cartoon: standard amino acids (incl. common
+# protonation-state variants) and nucleotides.
+STANDARD_POLYMER_RESNAMES = frozenset({
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+    "HID", "HIE", "HIP", "HSD", "HSE", "HSP", "CYX", "CYM", "ASH", "GLH",
+    "LYN", "ARN", "TYM",
+    "A", "U", "G", "C", "T", "DA", "DT", "DG", "DC", "DU", "RA", "RU",
+    "RG", "RC",
+})
 
 
 def _staging_dir() -> Path:
@@ -68,8 +88,28 @@ def _serialize(state) -> str:
     )
 
 
+def _count_standard_polymer_residues(mol) -> int:
+    """Count residues whose resname is a standard (cartoon-able) amino acid or
+    nucleotide. Residues are grouped by (resid, insertion, chain, segid)."""
+    seen: dict = {}
+    for resid, ins, chain, segid, resname in zip(
+        mol.resid.tolist(),
+        mol.insertion.tolist(),
+        mol.chain.tolist(),
+        mol.segid.tolist(),
+        mol.resname.tolist(),
+    ):
+        seen[(resid, ins, chain, segid)] = resname
+    return sum(1 for rn in seen.values() if rn in STANDARD_POLYMER_RESNAMES)
+
+
 def build_mvs(mol) -> str:
     """Build the MVS (mvsj) string for ``mol``.
+
+    A structure with enough standard polymer residues is drawn as a cartoon
+    with ball-and-stick hetero (the clean protein/nucleic view). Anything else
+    - small molecules, ligands, non-standard or cyclic peptides - is drawn
+    entirely as ball-and-stick so every atom stays visible.
 
     The download URL is the sentinel; the bootstrap substitutes the real URL.
     """
@@ -79,11 +119,16 @@ def build_mvs(mol) -> str:
         .parse(format="bcif")
         .model_structure()
     )
-    structure.component(selector="polymer").representation(type="cartoon").color(
-        custom={"molstar_color_theme_name": "secondary-structure"}
-    )
-    for selector in _BALL_AND_STICK_SELECTORS:
-        structure.component(selector=selector).representation(
+    if _count_standard_polymer_residues(mol) >= MIN_CARTOON_RESIDUES:
+        structure.component(selector="polymer").representation(
+            type="cartoon"
+        ).color(custom={"molstar_color_theme_name": "secondary-structure"})
+        for selector in _BALL_AND_STICK_SELECTORS:
+            structure.component(selector=selector).representation(
+                type="ball_and_stick"
+            ).color(custom={"molstar_color_theme_name": "element-symbol"})
+    else:
+        structure.component(selector="all").representation(
             type="ball_and_stick"
         ).color(custom={"molstar_color_theme_name": "element-symbol"})
 
