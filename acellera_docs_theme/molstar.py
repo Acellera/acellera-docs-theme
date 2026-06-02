@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 
 import molviewspec as mvs
+from molviewspec.nodes import ComponentExpression
 
 __all__ = [
     "show3d",
@@ -53,11 +54,11 @@ MAX_FORMAL_CHARGE_LABELS = 200
 # Hetero selectors rendered as ball-and-stick alongside the polymer cartoon
 # (bond orders render automatically from the BinaryCIF bond table; element
 # coloring via the molstar color theme).
-_BALL_AND_STICK_SELECTORS = ("ligand", "ion", "water")
+_BALL_AND_STICK_SELECTORS = ("ligand", "ion", "water", "branched")
 
 # Ball-and-stick atom/bond thickness. MVS's size_factor default of 1 gives
 # oversized spheres; 0.5 yields a balanced ball-and-stick close to moleculekit's.
-BALL_AND_STICK_SIZE_FACTOR = 0.5
+BALL_AND_STICK_SIZE_FACTOR = 0.6
 
 # molstar's cartoon needs a standard polymer backbone trace. Structures with
 # fewer cartoon-able standard residues than this (small molecules, ligands,
@@ -107,13 +108,30 @@ def _count_standard_polymer_residues(mol) -> int:
     return sum(1 for rn in seen.values() if rn in STANDARD_POLYMER_RESNAMES)
 
 
-def build_mvs(mol) -> str:
+def build_mvs(
+    mol,
+    *,
+    ball_and_stick_sel: str | None = None,
+    highlight_bonds: list[tuple[str, str]] | None = None,
+    focus_sel: str | None = None,
+) -> str:
     """Build the MVS (mvsj) string for ``mol``.
 
     A structure with enough standard polymer residues is drawn as a cartoon
     with ball-and-stick hetero (the clean protein/nucleic view). Anything else
     - small molecules, ligands, non-standard or cyclic peptides - is drawn
     entirely as ball-and-stick so every atom stays visible.
+
+    ``ball_and_stick_sel`` is an optional moleculekit atom selection string.
+    Atoms matching it are added on top of the default representation as
+    ball-and-stick - useful for spotlighting a binding site or a specific
+    side chain that otherwise lives inside the protein cartoon.
+
+    ``highlight_bonds`` is an optional list of ``(sel1, sel2)`` atom-selection
+    pairs. Each pair is drawn as a fat orange tube between the two atoms -
+    useful for pointing out a custom bond (isopeptide, crosslink, ...) over
+    the underlying representation. Each selection must resolve to exactly
+    one atom.
 
     The download URL is the sentinel; the bootstrap substitutes the real URL.
     """
@@ -131,10 +149,61 @@ def build_mvs(mol) -> str:
             structure.component(selector=selector).representation(
                 type="ball_and_stick", size_factor=BALL_AND_STICK_SIZE_FACTOR
             ).color(custom={"molstar_color_theme_name": "element-symbol"})
+        # Catch any non-polymer residues the built-in selectors don't pick up
+        # (lipids in particular - molstar's ligand/ion/water selectors don't
+        # classify POPC/POPE/CHL1/... as ligand, so without this they'd
+        # render as nothing). Match by residue name against everything in
+        # `mol` that's not a standard polymer residue.
+        other_resnames = sorted(
+            set(mol.resname.tolist()) - STANDARD_POLYMER_RESNAMES
+        )
+        if other_resnames:
+            extra = [ComponentExpression(label_comp_id=rn) for rn in other_resnames]
+            structure.component(selector=extra).representation(
+                type="ball_and_stick", size_factor=BALL_AND_STICK_SIZE_FACTOR
+            ).color(custom={"molstar_color_theme_name": "element-symbol"})
     else:
         structure.component(selector="all").representation(
             type="ball_and_stick", size_factor=BALL_AND_STICK_SIZE_FACTOR
         ).color(custom={"molstar_color_theme_name": "element-symbol"})
+
+    if ball_and_stick_sel is not None:
+        mask = mol.atomselect(ball_and_stick_sel)
+        if mask.any():
+            indices = [int(i) for i in mask.nonzero()[0]]
+            extra = [ComponentExpression(atom_index=i) for i in indices]
+            structure.component(selector=extra).representation(
+                type="ball_and_stick", size_factor=BALL_AND_STICK_SIZE_FACTOR
+            ).color(custom={"molstar_color_theme_name": "element-symbol"})
+
+    if highlight_bonds:
+        bonds_group = structure.primitives(color="orange")
+        for sel_a, sel_b in highlight_bonds:
+            ia = mol.atomselect(sel_a, indexes=True)
+            ib = mol.atomselect(sel_b, indexes=True)
+            if len(ia) != 1 or len(ib) != 1:
+                raise ValueError(
+                    "highlight_bonds selections must each pick exactly one "
+                    f"atom; got {len(ia)} for {sel_a!r} and {len(ib)} for "
+                    f"{sel_b!r}"
+                )
+            sa = mol.coords[int(ia[0]), :, 0]
+            sb = mol.coords[int(ib[0]), :, 0]
+            bonds_group.tube(
+                start=(float(sa[0]), float(sa[1]), float(sa[2])),
+                end=(float(sb[0]), float(sb[1]), float(sb[2])),
+                radius=0.3,
+            )
+
+    if focus_sel is not None:
+        mask = mol.atomselect(focus_sel)
+        if mask.any():
+            indices = [int(i) for i in mask.nonzero()[0]]
+            # Invisible component (no .representation() call) used only as
+            # a focus target so the viewer centers on these atoms.
+            structure.component(
+                selector=[ComponentExpression(atom_index=i) for i in indices]
+            ).focus()
 
     _add_formal_charge_labels(builder, mol)
     return _serialize(builder.get_state())
@@ -168,7 +237,13 @@ def _add_formal_charge_labels(builder, mol) -> None:
             float(coords[i, 2, 0]),
         ]
         primitives.label(
-            position=position, text=text, label_size=1.0, label_color="black"
+            position=position,
+            text=text,
+            label_size=0.7,
+            label_color="black",
+            # Push the label toward the camera so it doesn't sit inside the
+            # ball-and-stick atom sphere at the atom's exact coordinate.
+            label_offset=1.0,
         )
 
 
@@ -190,7 +265,15 @@ class MolstarView:
         )
 
 
-def show3d(mol, *, height: int = 420, name: str | None = None) -> MolstarView:
+def show3d(
+    mol,
+    *,
+    height: int = 420,
+    name: str | None = None,
+    ball_and_stick: str | None = None,
+    highlight_bonds: list[tuple[str, str]] | None = None,
+    focus: str | None = None,
+) -> MolstarView:
     """Render ``mol`` as an interactive Mol* viewer in the docs.
 
     Parameters
@@ -202,6 +285,19 @@ def show3d(mol, *, height: int = 420, name: str | None = None) -> MolstarView:
         Viewer height in pixels.
     name
         Reserved for a future on-screen label; unused in v1.
+    ball_and_stick
+        Optional moleculekit atom selection string. Atoms matching it are
+        rendered as ball-and-stick on top of the default representation -
+        useful for spotlighting a binding site or a specific residue.
+    highlight_bonds
+        Optional list of ``(sel1, sel2)`` atom-selection pairs. Each pair
+        is drawn as a fat orange tube between the two atoms - useful for
+        pointing out a custom bond (isopeptide, crosslink, ...). Each
+        selection must resolve to exactly one atom.
+    focus
+        Optional moleculekit atom selection string. The viewer opens
+        zoomed in on the matching atoms - handy when the interesting
+        feature is buried inside a large system.
     """
     staging = _staging_dir()
     tmp = staging / f".tmp-{os.getpid()}-{id(mol)}.bcif"
@@ -213,7 +309,16 @@ def show3d(mol, *, height: int = 420, name: str | None = None) -> MolstarView:
     else:
         tmp.rename(final)
 
-    return MolstarView(final.name, build_mvs(mol), height)
+    return MolstarView(
+        final.name,
+        build_mvs(
+            mol,
+            ball_and_stick_sel=ball_and_stick,
+            highlight_bonds=highlight_bonds,
+            focus_sel=focus,
+        ),
+        height,
+    )
 
 
 def reset_staging(path: str) -> str:
