@@ -33,6 +33,17 @@ _FAVICON = str(_THIS_DIR / "_static" / "acellera-logo-16x16.png")
 _LOGO_REL = "_static/acellera_new_web.png"
 _ACELLERA_ICON_REL = "_static/acellera-logo-white.png"
 
+# Published Acellera docs sites, keyed by their URL slug under
+# https://software.acellera.com/<slug>/. Used to auto-wire intersphinx
+# cross-references between the sibling projects and to set each site's
+# canonical ``html_baseurl``. Add new sites here and every project picks
+# them up on its next build.
+_SITES = {
+    "htmd": "https://software.acellera.com/htmd/",
+    "moleculekit": "https://software.acellera.com/moleculekit/",
+    "acemd": "https://software.acellera.com/acemd/",
+}
+
 
 def _append_unique(seq: list, item: str) -> list:
     if item not in seq:
@@ -45,6 +56,7 @@ def apply(
     *,
     project_name: str,
     github_repo: str,
+    intersphinx_slug: str | None = None,
     extra_icon_links: list[dict[str, str]] | None = None,
 ) -> None:
     """Wire the Acellera branding into the conf.py namespace ``ns``.
@@ -60,6 +72,13 @@ def apply(
     github_repo
         ``owner/repo`` string used for the GitHub icon link
         (e.g. ``"Acellera/moleculekit"``).
+    intersphinx_slug
+        This project's own slug under ``https://software.acellera.com/``
+        (e.g. ``"moleculekit"``). Used to set ``html_baseurl`` and to
+        exclude the project from its own intersphinx mapping. Defaults to
+        ``project_name.lower()``, which is correct for the current sites
+        (HTMD/MoleculeKit/ACEMD); pass it explicitly when the display name
+        does not match the published slug.
     extra_icon_links
         Extra icon-link dicts appended after the standard
         Twitter / GitHub / LinkedIn / YouTube set.
@@ -93,6 +112,21 @@ def apply(
     ns["extensions"] = _append_unique(
         list(ns.get("extensions") or []), "acellera_docs_theme.molstar"
     )
+
+    # Cross-project linking: every sibling Acellera docs site is wired in as
+    # an intersphinx target so ``{py:...}`` / ``{external}`` references resolve
+    # against its published ``objects.inv``. The project never links to itself.
+    slug = intersphinx_slug or project_name.lower()
+    ns["extensions"] = _append_unique(ns["extensions"], "sphinx.ext.intersphinx")
+    mapping = dict(ns.get("intersphinx_mapping") or {})
+    for name, url in _SITES.items():
+        if name != slug:
+            mapping.setdefault(name, (url, None))
+    ns["intersphinx_mapping"] = mapping
+    # Don't let a slow/unreachable sibling site hang the build.
+    ns.setdefault("intersphinx_timeout", 10)
+    if slug in _SITES:
+        ns.setdefault("html_baseurl", _SITES[slug])
 
     icon_links: list[dict[str, str]] = [
         {
