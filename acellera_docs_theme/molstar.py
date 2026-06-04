@@ -112,6 +112,7 @@ def build_mvs(
     mol,
     *,
     ball_and_stick_sel: str | None = None,
+    representations: list[dict] | None = None,
     highlight_bonds: list[tuple[str, str]] | None = None,
     focus_sel: str | None = None,
 ) -> str:
@@ -126,6 +127,14 @@ def build_mvs(
     Atoms matching it are added on top of the default representation as
     ball-and-stick - useful for spotlighting a binding site or a specific
     side chain that otherwise lives inside the protein cartoon.
+
+    ``representations`` is an optional list of overlay dicts, each with a
+    required ``sel`` (moleculekit atom selection) plus optional ``type``
+    (default ``"ball_and_stick"``; any MVS type, e.g. ``"spacefill"`` for van
+    der Waals spheres), ``color`` (SVG name or hex; defaults to element
+    coloring), ``opacity`` (0-1), and ``custom`` (Mol*-specific representation
+    params). Each is drawn on top of the default representation - a green
+    translucent ``spacefill`` makes a halo-like highlight, for example.
 
     ``highlight_bonds`` is an optional list of ``(sel1, sel2)`` atom-selection
     pairs. Each pair is drawn as a fat orange tube between the two atoms -
@@ -175,6 +184,25 @@ def build_mvs(
             structure.component(selector=extra).representation(
                 type="ball_and_stick", size_factor=BALL_AND_STICK_SIZE_FACTOR
             ).color(custom={"molstar_color_theme_name": "element-symbol"})
+
+    for rep in representations or []:
+        mask = mol.atomselect(rep["sel"])
+        if not mask.any():
+            continue
+        indices = [int(i) for i in mask.nonzero()[0]]
+        extra = [ComponentExpression(atom_index=i) for i in indices]
+        rep_kwargs = {}
+        if rep.get("custom") is not None:
+            rep_kwargs["custom"] = rep["custom"]
+        component = structure.component(selector=extra).representation(
+            type=rep.get("type", "ball_and_stick"), **rep_kwargs
+        )
+        if rep.get("color") is not None:
+            component.color(color=rep["color"])
+        else:
+            component.color(custom={"molstar_color_theme_name": "element-symbol"})
+        if rep.get("opacity") is not None:
+            component.opacity(opacity=rep["opacity"])
 
     if highlight_bonds:
         bonds_group = structure.primitives(color="orange")
@@ -271,6 +299,7 @@ def show3d(
     height: int = 420,
     name: str | None = None,
     ball_and_stick: str | None = None,
+    representations: list[dict] | None = None,
     highlight_bonds: list[tuple[str, str]] | None = None,
     focus: str | None = None,
 ) -> MolstarView:
@@ -289,6 +318,13 @@ def show3d(
         Optional moleculekit atom selection string. Atoms matching it are
         rendered as ball-and-stick on top of the default representation -
         useful for spotlighting a binding site or a specific residue.
+    representations
+        Optional list of overlay dicts for full control. Each dict needs a
+        ``sel`` (moleculekit atom selection) and may set ``type`` (default
+        ``"ball_and_stick"``; e.g. ``"spacefill"`` for van der Waals spheres),
+        ``color`` (SVG name or hex), ``opacity`` (0-1), and ``custom`` (Mol*
+        representation params). Drawn on top of the default representation; a
+        translucent green ``spacefill`` gives a halo-like highlight.
     highlight_bonds
         Optional list of ``(sel1, sel2)`` atom-selection pairs. Each pair
         is drawn as a fat orange tube between the two atoms - useful for
@@ -314,6 +350,7 @@ def show3d(
         build_mvs(
             mol,
             ball_and_stick_sel=ball_and_stick,
+            representations=representations,
             highlight_bonds=highlight_bonds,
             focus_sel=focus,
         ),

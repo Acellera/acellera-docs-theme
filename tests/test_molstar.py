@@ -35,6 +35,12 @@ class FakeMol:
     def write(self, path):
         Path(path).write_bytes(self.payload)
 
+    def atomselect(self, sel, indexes=False):
+        # Minimal stand-in: select every atom (enough to verify that an
+        # overlay representation is emitted for a non-empty selection).
+        mask = np.ones(self.coords.shape[0], dtype=bool)
+        return mask.nonzero()[0] if indexes else mask
+
 
 def _std_protein(n_res=8, payload=b"PROT"):
     """A molecule of n_res standard (cartoon-able) residues, 1 atom each."""
@@ -102,6 +108,41 @@ def test_few_standard_residues_uses_ball_and_stick(tmp_path, monkeypatch):
     monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
     blob = json.dumps(_mvs_from_html(show3d(_std_protein(n_res=MIN_CARTOON_RESIDUES - 1))._repr_html_()))
     assert "cartoon" not in blob
+    assert "ball_and_stick" in blob
+
+
+# --- overlay representations -------------------------------------------------
+
+def test_show3d_representations_render_as_requested_type(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    blob = json.dumps(_mvs_from_html(show3d(
+        _std_protein(n_res=20),
+        representations=[{"sel": "resname ALA", "type": "spacefill"}],
+    )._repr_html_()))
+    assert "spacefill" in blob          # the requested overlay type
+    assert "cartoon" in blob            # base cartoon still present
+
+
+def test_show3d_representations_apply_color_and_opacity(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    blob = json.dumps(_mvs_from_html(show3d(
+        _std_protein(n_res=20),
+        representations=[{"sel": "resname ALA", "type": "spacefill",
+                          "color": "green", "opacity": 0.4}],
+    )._repr_html_()))
+    assert "green" in blob              # uniform color applied
+    assert "opacity" in blob and "0.4" in blob   # opacity applied
+
+
+def test_show3d_default_has_no_spacefill(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    blob = json.dumps(_mvs_from_html(show3d(_std_protein(n_res=20))._repr_html_()))
+    assert "spacefill" not in blob
+
+
+def test_show3d_ball_and_stick_renders_selection(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    blob = json.dumps(_mvs_from_html(show3d(_std_protein(n_res=20), ball_and_stick="resname ALA")._repr_html_()))
     assert "ball_and_stick" in blob
 
 
