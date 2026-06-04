@@ -146,6 +146,22 @@ def test_show3d_representations_pass_through_extra_params(tmp_path, monkeypatch)
     assert "0.33" in blob   # extra MVS kwargs (size_factor) pass through
 
 
+def test_show3d_sel_filters_structure_before_rendering(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    mol = _std_protein(n_res=20)
+    calls = {}
+
+    def fake_copy(sel=None):
+        calls["sel"] = sel
+        return _std_protein(n_res=10, payload=b"FILTERED")
+
+    mol.copy = fake_copy
+    html = show3d(mol, sel="not water")._repr_html_()
+    assert calls.get("sel") == "not water"   # sel triggers a filtered copy
+    expected = hashlib.sha1(b"FILTERED").hexdigest() + ".bcif"
+    assert expected in html                  # the filtered structure is what renders
+
+
 def test_show3d_default_has_no_spacefill(tmp_path, monkeypatch):
     monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
     blob = json.dumps(_mvs_from_html(show3d(_std_protein(n_res=20))._repr_html_()))

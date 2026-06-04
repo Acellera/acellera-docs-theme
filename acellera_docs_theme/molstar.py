@@ -299,6 +299,7 @@ class MolstarView:
 def show3d(
     mol,
     *,
+    sel: str | None = None,
     height: int = 420,
     name: str | None = None,
     ball_and_stick: str | None = None,
@@ -313,6 +314,12 @@ def show3d(
     mol
         A moleculekit ``Molecule`` (needs ``.write(path)`` writing BinaryCIF for
         a ``.bcif`` path, plus ``.coords`` and ``.formalcharge``).
+    sel
+        Optional moleculekit atom selection. When given, only the matching
+        atoms are shown: the molecule is filtered to ``sel`` (via
+        ``mol.copy(sel=sel)``) before anything is drawn, so it also subsets
+        what the ``representations``/``focus`` selections can match. Use it to
+        hide bulk solvent, e.g. ``sel="not water"``.
     height
         Viewer height in pixels.
     name
@@ -339,6 +346,8 @@ def show3d(
         zoomed in on the matching atoms - handy when the interesting
         feature is buried inside a large system.
     """
+    if sel is not None:
+        mol = mol.copy(sel=sel)
     staging = _staging_dir()
     tmp = staging / f".tmp-{os.getpid()}-{id(mol)}.bcif"
     mol.write(str(tmp))
