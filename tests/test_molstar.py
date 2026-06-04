@@ -134,6 +134,18 @@ def test_show3d_representations_apply_color_and_opacity(tmp_path, monkeypatch):
     assert "opacity" in blob and "0.4" in blob   # opacity applied
 
 
+def test_show3d_representations_pass_through_extra_params(tmp_path, monkeypatch):
+    monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
+    # 0.33 is a distinctive value the default view never emits (its hetero
+    # ball-and-stick uses 0.6), so finding it proves the dict's size_factor
+    # was passed through to the overlay representation.
+    blob = json.dumps(_mvs_from_html(show3d(
+        _std_protein(n_res=20),
+        representations=[{"sel": "resname ALA", "type": "ball_and_stick", "size_factor": 0.33}],
+    )._repr_html_()))
+    assert "0.33" in blob   # extra MVS kwargs (size_factor) pass through
+
+
 def test_show3d_default_has_no_spacefill(tmp_path, monkeypatch):
     monkeypatch.setenv(STAGING_ENV_VAR, str(tmp_path))
     blob = json.dumps(_mvs_from_html(show3d(_std_protein(n_res=20))._repr_html_()))

@@ -132,9 +132,10 @@ def build_mvs(
     required ``sel`` (moleculekit atom selection) plus optional ``type``
     (default ``"ball_and_stick"``; any MVS type, e.g. ``"spacefill"`` for van
     der Waals spheres), ``color`` (SVG name or hex; defaults to element
-    coloring), ``opacity`` (0-1), and ``custom`` (Mol*-specific representation
-    params). Each is drawn on top of the default representation - a green
-    translucent ``spacefill`` makes a halo-like highlight, for example.
+    coloring), and ``opacity`` (0-1). Any other keys (``size_factor``,
+    ``custom``, ...) pass straight through to the MVS representation node.
+    Each is drawn on top of the default representation - a green translucent
+    ``spacefill`` makes a halo-like highlight, for example.
 
     ``highlight_bonds`` is an optional list of ``(sel1, sel2)`` atom-selection
     pairs. Each pair is drawn as a fat orange tube between the two atoms -
@@ -186,23 +187,25 @@ def build_mvs(
             ).color(custom={"molstar_color_theme_name": "element-symbol"})
 
     for rep in representations or []:
-        mask = mol.atomselect(rep["sel"])
+        spec = dict(rep)
+        sel = spec.pop("sel")
+        color = spec.pop("color", None)
+        opacity = spec.pop("opacity", None)
+        spec.setdefault("type", "ball_and_stick")
+        mask = mol.atomselect(sel)
         if not mask.any():
             continue
         indices = [int(i) for i in mask.nonzero()[0]]
         extra = [ComponentExpression(atom_index=i) for i in indices]
-        rep_kwargs = {}
-        if rep.get("custom") is not None:
-            rep_kwargs["custom"] = rep["custom"]
-        component = structure.component(selector=extra).representation(
-            type=rep.get("type", "ball_and_stick"), **rep_kwargs
-        )
-        if rep.get("color") is not None:
-            component.color(color=rep["color"])
+        # Remaining keys (type, custom, size_factor, ...) pass straight through
+        # to the MVS representation node.
+        component = structure.component(selector=extra).representation(**spec)
+        if color is not None:
+            component.color(color=color)
         else:
             component.color(custom={"molstar_color_theme_name": "element-symbol"})
-        if rep.get("opacity") is not None:
-            component.opacity(opacity=rep["opacity"])
+        if opacity is not None:
+            component.opacity(opacity=opacity)
 
     if highlight_bonds:
         bonds_group = structure.primitives(color="orange")
@@ -322,8 +325,9 @@ def show3d(
         Optional list of overlay dicts for full control. Each dict needs a
         ``sel`` (moleculekit atom selection) and may set ``type`` (default
         ``"ball_and_stick"``; e.g. ``"spacefill"`` for van der Waals spheres),
-        ``color`` (SVG name or hex), ``opacity`` (0-1), and ``custom`` (Mol*
-        representation params). Drawn on top of the default representation; a
+        ``color`` (SVG name or hex), and ``opacity`` (0-1). Any other keys
+        (``size_factor``, ``custom``, ...) pass straight through to the MVS
+        representation node. Drawn on top of the default representation; a
         translucent green ``spacefill`` gives a halo-like highlight.
     highlight_bonds
         Optional list of ``(sel1, sel2)`` atom-selection pairs. Each pair
