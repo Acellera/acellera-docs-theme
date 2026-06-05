@@ -47,3 +47,41 @@ def test_apply_intersphinx_slug_override_excludes_self():
     assert "acemd" not in ns["intersphinx_mapping"]
     assert "htmd" in ns["intersphinx_mapping"]
     assert ns["html_baseurl"] == "https://software.acellera.com/acemd/"
+
+
+# --- type cross-referencing (stdlib + numpy intersphinx, napoleon) ----------
+
+
+def test_apply_wires_stdlib_and_numpy_intersphinx():
+    ns = _run("MoleculeKit", "Acellera/moleculekit")
+    assert ns["intersphinx_mapping"]["python"] == ("https://docs.python.org/3", None)
+    assert ns["intersphinx_mapping"]["numpy"] == ("https://numpy.org/doc/stable", None)
+
+
+def test_apply_enables_napoleon_type_preprocessing():
+    ns = _run("MoleculeKit", "Acellera/moleculekit")
+    assert ns["napoleon_preprocess_types"] is True
+    assert ns["python_use_unqualified_type_names"] is True
+    assert ns["napoleon_type_aliases"]["np.ndarray"] == "numpy.ndarray"
+
+
+def test_apply_wires_common_acellera_class_aliases():
+    # Classes shared across moleculekit/htmd/acemd resolve everywhere.
+    ns = _run("HTMD", "Acellera/htmd")
+    assert ns["napoleon_type_aliases"]["Molecule"] == "moleculekit.molecule.Molecule"
+    assert ns["napoleon_type_aliases"]["SmallMol"] == "moleculekit.smallmol.smallmol.SmallMol"
+
+
+def test_apply_lets_projects_extend_type_aliases():
+    ns = {"napoleon_type_aliases": {"MyClass": "mypkg.MyClass"}}
+    apply(ns, project_name="MoleculeKit", github_repo="Acellera/moleculekit")
+    # project-supplied alias preserved, generic ones added alongside
+    assert ns["napoleon_type_aliases"]["MyClass"] == "mypkg.MyClass"
+    assert ns["napoleon_type_aliases"]["np.ndarray"] == "numpy.ndarray"
+    assert ns["napoleon_type_aliases"]["Molecule"] == "moleculekit.molecule.Molecule"
+
+
+def test_apply_does_not_override_user_napoleon_settings():
+    ns = {"napoleon_preprocess_types": False}
+    apply(ns, project_name="MoleculeKit", github_repo="Acellera/moleculekit")
+    assert ns["napoleon_preprocess_types"] is False

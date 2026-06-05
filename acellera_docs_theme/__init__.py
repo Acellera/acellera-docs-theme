@@ -122,11 +122,39 @@ def apply(
     for name, url in _SITES.items():
         if name != slug:
             mapping.setdefault(name, (url, None))
+    # Standard library + scientific stack, so type references in docstrings and
+    # signatures (e.g. ``str``, ``numpy.ndarray``) resolve to their upstream docs.
+    mapping.setdefault("python", ("https://docs.python.org/3", None))
+    mapping.setdefault("numpy", ("https://numpy.org/doc/stable", None))
     ns["intersphinx_mapping"] = mapping
     # Don't let a slow/unreachable sibling site hang the build.
     ns.setdefault("intersphinx_timeout", 10)
     if slug in _SITES:
         ns.setdefault("html_baseurl", _SITES[slug])
+
+    # Napoleon: render numpy/google-style ``name : type`` fields as resolved
+    # cross-references and normalize common aliases to their canonical targets.
+    # Projects can extend ``napoleon_type_aliases`` after calling apply() for
+    # their own classes; the values below are only applied if not already set.
+    ns.setdefault("napoleon_preprocess_types", True)
+    ns.setdefault("napoleon_use_param", True)
+    ns.setdefault("napoleon_use_rtype", True)
+    ns.setdefault("python_use_unqualified_type_names", True)
+    type_aliases = dict(ns.get("napoleon_type_aliases") or {})
+    for alias, target in (
+        # numpy
+        ("np", "numpy"),
+        ("np.ndarray", "numpy.ndarray"),
+        ("ndarray", "numpy.ndarray"),
+        # Common Acellera classes referenced across moleculekit/htmd/acemd docs.
+        # These resolve internally in moleculekit's own build and via the
+        # moleculekit intersphinx inventory in sibling projects.
+        ("Molecule", "moleculekit.molecule.Molecule"),
+        ("SmallMol", "moleculekit.smallmol.smallmol.SmallMol"),
+        ("SmallMolLib", "moleculekit.smallmol.smallmollib.SmallMolLib"),
+    ):
+        type_aliases.setdefault(alias, target)
+    ns["napoleon_type_aliases"] = type_aliases
 
     icon_links: list[dict[str, str]] = [
         {

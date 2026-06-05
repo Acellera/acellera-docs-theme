@@ -1,6 +1,7 @@
 import hashlib
 import html as htmllib
 import json
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -196,6 +197,10 @@ def test_show3d_skips_labels_over_cap(tmp_path, monkeypatch, caplog):
     coords = [[[float(i)], [0.0], [0.0]] for i in range(n)]
     mol = FakeMol(b"BIG", coords=coords, formalcharge=[1] * n)  # n standard ALA -> cartoon path
 
+    # The label-cap warning is emitted by moleculekit's logger
+    # (moleculekit.viewer.molstar.mvs), whose parent "moleculekit" logger sets
+    # propagate=0; re-enable propagation so caplog (root) can capture it.
+    monkeypatch.setattr(logging.getLogger("moleculekit"), "propagate", True)
     with caplog.at_level("WARNING"):
         blob = json.dumps(_mvs_from_html(show3d(mol)._repr_html_()))
 

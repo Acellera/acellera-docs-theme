@@ -9,6 +9,7 @@ dependencies = [
   "pydata-sphinx-theme>=0.16",
   "sphinx>=7",
   "molviewspec",
+  "moleculekit",
 ]
 
 [project.urls]
